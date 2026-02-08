@@ -1,5 +1,9 @@
 # <kbd>[**Button Text**](https://example.com/)</kbd>
 
+<a href="https://example.com">
+  <img src="https://path-to-your-button-image.png" alt="Button Text" width="100"/>
+</a>
+
 # Research compendium for Field and Dean (under revision)
 This R- and Python-based research compendium supports a semi-autonomous computer vision survey of the Northern San Juan for detecting archaeological sites.
 
