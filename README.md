@@ -29,7 +29,8 @@ Field, S and L. Dean. Research compendium for: Computer Vision Survey of the Nor
 
 # Requirements
 This analysis requires R (≥ 4.2.0) and the following packages:
-  c('sf','terra','ggplot2','tidyterra','dplyr','tidyverse',
+`sf`
+'terra','ggplot2','tidyterra','dplyr','tidyverse',
              'elevatr','whitebox','giscoR','ggnewscale','ggblend',
              'magick','stringr','filesstrings','purrr')
 
