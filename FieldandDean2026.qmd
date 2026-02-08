@@ -1,0 +1,522 @@
+---
+title: "FieldandDean_2026"
+format: html
+editor: visual
+---
+
+# Research compendium for Field and Dean (2026)
+
+This R-based research compendium supports the creation of a PyTorch image classifier to detect ancestral Pueblo residential sites in static images (\~250 m x 250 m) of relief transformed LiDAR derived digital elevation models.
+
+View the raw source code and output at: <https://github.com/sfield2/NSJ_computervision>
+
+**When using the code included in this research compendium, please cite *all* of the following:**
+
+> Field, S and L. Dean. *A Computer Vision Survey of the Northern San Juan and the Case for Image Classification in Archaeology*. American Antiquity, In review.
+>
+> Field, S and L. Dean. Research compendium for: *Computer Vision Survey of the Northern San Juan and the Case for Image Classification in Archaeology*, 2026. Version 1.0.0. Zenodo. \[DOI\]
+
+#### Set Up
+
+```{r setup}
+#| echo: false
+#| message: false
+#| warning: false
+
+packages <-c('sf','terra','ggplot2','tidyterra','dplyr','tidyverse',
+             'elevatr','whitebox','giscoR','ggnewscale','ggblend',
+             'magick','stringr','filesstrings','purrr')
+for(p in packages) if(p %in% rownames(installed.packages()) == F) { install.packages(p) }
+for(p in packages) suppressPackageStartupMessages(library(p,quietly=T,character.only=T))
+
+theme_set(theme_bw())
+
+#setwd()
+```
+
+```{python setup}
+#| echo: false
+#| message: false
+#| warning: false
+
+import os
+import splitfolders
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
+import torchvision
+import torchvision.transforms as transforms
+from torchvision.datasets import ImageFolder
+import timm
+import csv
+from glob import glob
+import matplotlib.pyplot as plt # For data viz
+import pandas as pd
+import numpy as np
+import sys
+from tqdm import tqdm
+from PIL import Image
+```
+
+#### R Functions & Directories
+
+1.  `box` function used to derive spatial bounding boxes for individual point locations
+2.  `separate_components` function used to move images between folders for validation
+
+```{r}
+box <- function(a,b,c){
+  a%>%
+    mutate(xmin = .$x - b)%>%
+    mutate(xmax = .$x + b)%>%
+    mutate(ymin = .$y - c)%>%
+    mutate(ymax = .$y + c)
+}
+
+
+separate_components <- function(string){
+  components <- unlist(strsplit(string,"/"))
+  return(components)
+}
+```
+
+Directories:
+
+1.  Build a `training_images` directory with two sub-directories: `SITE` and `NONSITE`.
+2.  Build a `deployment_data` directory for all images scraped for survey area
+3.  Build an `output` directory for all model and classification outputs with a sub-directory `validation` to store images for manual validation
+
+```{r}
+primary <- ("./DATA/images_directory_V1")
+secondary_1 <- ("./DATA/images_directory_V1/SITE")
+secondary_2 <- ("./DATA/images_directory_V1/NONSITE")
+deployment <- ("./DATA/deployment_data")
+output <- ("./OUTPUT")
+validation <- ("./OUTPUT/validation/")
+
+if (!dir.exists(primary)) {
+  dir.create(primary,recursive=T)
+}
+
+if (!dir.exists(secondary_1)) {
+  dir.create(secondary_1,recursive=T)
+}
+
+if (!dir.exists(secondary_2)) {
+  dir.create(secondary_2,recursive=T)
+}
+
+if(!dir.exists(deployment)){
+  dir.create(deployment,recursive=T)
+}
+
+if(!dir.exists(output)){
+  dir.create(output,recursive=T)
+}
+
+if(!dir.exists(validation)){
+  dir.create(validation,recursive=T)
+}
+```
+
+## Study Regions
+
+### The Northern San Juan
+
+The Northern San Juan (NSJ) encompasses an area of \~16,000 km^2^ in southwestern Colorado, southeastern Utah, and northwestern New Mexico. The region is topographically and culturally defined–being bound by the San Juan River to the south and including five sub regions of dense ancestral Pueblo occupation.
+
+### Mesa Verde National Park
+
+Mesa Verde National Park (MVNP) is located in SW Colorado and was defined as the training area due dense ancestral Pueblo occupation, as well as a long history of research and cultural landscape management resulting in a detailed site record.
+
+```{r}
+nsj <- st_read("./DATA/nsj.shp")%>%
+  st_transform(26912)
+
+mvnp <- st_read("./DATA/nsj.shp")%>%
+  st_transform(26912)
+```
+
+## Elevation Data
+
+LiDAR derived 1-m digital elevation models (DEMs) were downloaded from USGS 3DEP program (<https://apps.nationalmap.gov/lidar-explorer/#/>). Individual rasters were stitched together in QGIS to build a composite DEM of the study area. The composite DEM was converted using the Relief Visualization Toolbox in QGIS using the Sky-view Factor with a search radius of 10m, 16 search directions, and a vertical exaggeration factor of 5 (Kokalj et al. 2016; QGIS Development Team 2026; Verbovšek et al. 2019).
+
+```{r}
+r <- terra::rast("./DATA/dem_skyview.tif")
+crs(r)<- "epsg:26912"
+
+r_extent <- ext(r)%>%
+  as.polygons(.,crs=crs(r))%>%
+  st_as_sf()
+```
+
+## Site and Non-site Locations
+
+Known site locations from MVNP were accessed under NPS Permit No. ####.
+
+Likely non-site locations were also derived from random locations in MVNP.
+
+```{r}
+sites <- sf::read_sf("./DATA/mvnp_sensitive_sites.shp")%>%
+  st_transform(26912)%>%
+  vect()
+
+non_sites <- st_sample(r_extent,3500)%>%
+  st_as_sf()%>%
+  vect()
+```
+
+## Train Model
+
+### Build Training Images
+
+Extract coordinates for all site and nonsite locations and create static images for all.
+
+```{r}
+# scraping for 'site' images
+coords<-crds(sites)
+
+site_extents <- as.data.frame(sites[,c("id")])%>%
+  cbind(.,coords)%>%
+  box(.,150,150)
+
+
+for (i in 1:nrow(site_extents)){
+  testrs<- ext(as.numeric(site_extents[i,4:7]))
+  testo <- crop(r,testrs)
+  
+  name <- site_extents[i,c("id")]
+  
+  png(paste("./DATA/images_directory_V1/SITE/",name,"_site.png",sep="")) 
+  ggplot()+
+    geom_raster(data=testo,
+                aes(x, y, fill = dem_skyview),
+                show.legend = FALSE)+
+    scale_fill_distiller(palette = "Greys") +
+    new_scale_fill() +
+    theme_void()
+  dev.off()
+}
+
+
+# scraping for 'non-site' images
+coords<-crds(non_sites)
+
+nonsite_extents <- as.data.frame(non_sites[,c("id")])%>%
+  cbind(.,coords)%>%
+  box(.,150,150)
+
+for (i in 1:nrow(nonsite_extents)){
+  testrs<- ext(as.numeric(nonsite_extents[i,4:7]))
+  testo <- crop(r,testrs)
+  
+  name <- nonsite_extents[i,c("id")]
+  
+  png(paste("./DATA/images_directory_V1/NONSITE/",name,"_nonsite.png",sep=""))
+  ggplot()+
+    geom_raster(data=testo,
+                aes(x, y, fill = dem_skyview),
+                show.legend = FALSE)+
+    scale_fill_distiller(palette = "Greys") +
+    new_scale_fill() +
+    theme_void()
+  dev.off()
+}
+```
+
+### Train Model
+
+This is a bit of descriptive text.
+
+1.  Separate images into training, testing, and validation data sets
+2.  Set up directory and transform images to uniform dimensions
+3.  Create general structure of model
+4.  Create data loaders to feed images into model
+5.  Train model
+6.  Visualize and export training metrics
+7.  Export model and dictionary
+
+```{python}
+# part 1
+splitfolders.ratio('./DATA/images_directory_V1', output="./DATA/training_directory_V1", seed=2026, ratio=(.8, 0.1,0.1))  
+
+class PuebloDataset(Dataset):
+    def __init__(self, data_dir, transform=None):
+        self.data = ImageFolder(data_dir, transform=transform)
+    def __len__(self):
+        return len(self.data)
+    def __getitem__(self, idx):
+        return self.data[idx]
+    @property
+    def classes(self):
+        return self.data.classes
+
+# part 2
+data_dir = './DATA/training_directory_V1/train'
+
+target_to_class = {v: k for k, v in ImageFolder(data_dir).class_to_idx.items()}
+
+transform = transforms.Compose([
+    transforms.Resize((500, 500)),
+    transforms.ToTensor(),
+])
+
+dataset = PuebloDataset(data_dir, transform)
+
+for image, label in dataset:
+    break
+
+dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+
+for images, labels in dataloader:
+    break
+
+# part 3
+class SimplePuebloClassifer(nn.Module):
+    def __init__(self, num_classes=2):
+        super(SimplePuebloClassifer, self).__init__()
+        self.base_model = timm.create_model('efficientnet_b0', pretrained=True)
+        self.features = nn.Sequential(*list(self.base_model.children())[:-1])
+        enet_out_size = 1280
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(enet_out_size, num_classes)
+        )
+    
+    def forward(self, x):
+        x = self.features(x)
+        output = self.classifier(x)
+        return output
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+model = SimplePuebloClassifer(num_classes=2)
+
+
+# part 4
+train_folder = '../DATA/TRAINING DATA/TRAINING VERSION 3/train/'
+valid_folder = '../DATA/TRAINING DATA/TRAINING VERSION 3/val/'
+test_folder = '../DATA/TRAINING DATA/TRAINING VERSION 3/test/'
+
+train_dataset = PuebloDataset(train_folder, transform=transform)
+val_dataset = PuebloDataset(valid_folder, transform=transform)
+test_dataset = PuebloDataset(test_folder, transform=transform)
+
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+test_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+
+# part 5
+num_epochs = 15 ## low training at 75 epochs
+train_losses, val_losses = [], []
+
+model = SimplePuebloClassifer(num_classes=2)
+model.to(device)
+
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=0.00001) ##low training at 0.000001
+
+for epoch in range(num_epochs):
+    # Training phase
+    model.train()
+    running_loss = 0.0
+    for images, labels in tqdm(train_loader, desc='Training loop'):
+        # Move inputs and labels to the device
+        images, labels = images.to(device), labels.to(device)
+        
+        optimizer.zero_grad()
+        outputs = model(images)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item() * labels.size(0)
+    train_loss = running_loss / len(train_loader.dataset)
+    train_losses.append(train_loss)
+    
+    # Validation phase
+    model.eval()
+    running_loss = 0.0
+    with torch.no_grad():
+        for images, labels in tqdm(val_loader, desc='Validation loop'):
+            # Move inputs and labels to the device
+            images, labels = images.to(device), labels.to(device)
+         
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            running_loss += loss.item() * labels.size(0)
+    val_loss = running_loss / len(val_loader.dataset)
+    val_losses.append(val_loss)
+    
+    # print Epoch stats
+    print(f"Epoch {epoch+1}/{num_epochs} - Train loss: {train_loss}, Validation loss: {val_loss}")
+    
+# part 6
+plt.plot(train_losses, label='Training loss')
+plt.plot(val_losses, label='Validation loss')
+plt.legend()
+plt.title("Loss over epochs")
+plt.show()
+
+train_val_loss = pd.DataFrame({"Train_Loss":train_losses, "Validation_Loss": val_losses})
+train_val_loss["Iteration"] = range(1,len(train_val_loss)+1)
+train_val_loss.to_csv("./OUTPUT/model_training_results.csv", index=False)
+print("Training CSV exported")
+
+# part 7
+torch.save(model,'./OUTPUT/model_V1.pt')
+torch.save(model.state_dict(),'./OUTPUT/model_V1.pth')
+```
+
+## Deploy Model
+
+### Scrape Survey Area for Deployment Imagery 
+
+Extract coordinates for all grid locations in survey area and create static images for all.
+
+```{r}
+all <- st_read("./DATA/nsj.shp")%>%
+  st_transform(4326)
+
+r <- project(r,4326)
+
+# scraping for 'site' images
+coords<-crds(all)
+
+all_extents <- as.data.frame(all[,c("id")])%>%
+  cbind(.,coords)%>%
+  box(.,150,150)
+
+
+for (i in 1:nrow(all_extents)){
+  testrs<- ext(as.numeric(all_extents[i,4:7]))
+  testo <- crop(r,testrs)
+  
+  name <- all_extents[i,c("id")]
+  
+  png(paste("./DATA/deployment_data/",name,".png",sep="")) 
+  ggplot()+
+    geom_raster(data=testo,
+                aes(x, y, fill = dem_skyview),
+                show.legend = FALSE)+
+    scale_fill_distiller(palette = "Greys") +
+    new_scale_fill() +
+    theme_void()
+  dev.off()
+}
+```
+
+### Deploy Model 
+
+1.  Build transformer, establish processing component (device), establish model format and import model V1
+2.  Define image preprocessor and prediction form
+3.  Classify all images and export results
+
+```{python}
+# part 1
+transform = transforms.Compose([
+    transforms.Resize((500, 500)),
+    transforms.ToTensor(),
+])
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+class SimplePuebloClassifer(nn.Module):
+    def __init__(self, num_classes=2):
+        super(SimplePuebloClassifer, self).__init__()
+        self.base_model = timm.create_model('efficientnet_b0', pretrained=True)
+        self.features = nn.Sequential(*list(self.base_model.children())[:-1])
+        enet_out_size = 1280
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(enet_out_size, num_classes)
+        )
+    
+    def forward(self, x):
+        x = self.features(x)
+        output = self.classifier(x)
+        return output
+
+model = torch.load('./OUTPUT/model_V1.pt',map_location=device)
+
+# part 2
+def preprocess_image(image_path, transform):
+    image = Image.open(image_path).convert("RGB")
+    return image, transform(image).unsqueeze(0)
+
+def predict(model, image_tensor, device):
+    model.eval()
+    with torch.no_grad():
+        image_tensor = image_tensor.to(device)
+        outputs = model(image_tensor)
+        probabilities = torch.nn.functional.softmax(outputs, dim=1)
+    return probabilities.cpu().numpy().flatten()
+  
+
+# part 3
+test_images = glob('./DATA/deployment_data/*')
+test_examples = np.random.choice(test_images, 1000) # NOTE: Change this to account for how many images within the deployment data you want to classify
+
+
+results = pd.DataFrame(np.nan, index=range(0,1000),columns =['Image_name','Site','Nonsite'])
+
+results['Image_name'] = results['Image_name'].astype(str)
+i = 0
+
+for example in test_examples:
+    original_image, image_tensor = preprocess_image(example, transform)
+    probabilities = predict(model, image_tensor, device)
+
+    results.at[i,'Image_name'] = example
+    results.at[i,'Site'] = probabilities[1,]
+    results.at[i,'Nonsite'] = probabilities[0,]
+
+    i = i + 1
+
+results.to_csv('./OUTPUT/model_v1_deployment_1_results.csv',index=False)
+```
+
+### Sorting Outputs for Validation
+
+1.  Import result csv and cut off threshold for detection (e.g., \>= 95%)
+2.  Copy all images with a high likelihood of site presence for manual validation
+3.  Create a table of all image names and likelihood estimates and export for manual validation
+
+```{r}
+# part 1
+init <- read.csv("./OUTPUT/model_v1_deployment_1_results.csv")
+
+init_pos <- subset(init, Site >=0.95)
+
+# part 2
+for (i in 1:nrow(init_pos)){
+  t <- init_pos[i,c("Image_name")]
+  file.copy(t,"./OUTPUT/validation/")
+}
+
+# part 3 - NOTE: for use when deploying model for 100,000 - 999,999 images
+for (i in 1:nrow(init_pos)){
+  init_pos_export <- init_pos[i,1]
+
+  t <- separate_components(init_pos_export)
+  t_l <- length(t)
+  image <- t[t_l]
+  image<- gsub("_VAT\\.png","\\.png",image)
+  
+  if(nchar(image)==5){
+    image <- sub('','00000',image)
+  }else if (nchar(image)==6){
+    image <- sub('','0000',image)
+  }else if (nchar(image)==7){
+    image <- sub('','000',image)
+  }else if (nchar(image)==8){
+    image <- sub('','00',image)
+  }else if (nchar(image)==9){
+    image <- sub('','0',image)
+  }else{
+    image <- image
+  }
+  init_pos[i,1]<-image
+}
+
+write.csv(init_pos,"./OUTPUT/results_positive.csv")
+```
