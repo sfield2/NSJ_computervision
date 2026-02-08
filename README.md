@@ -1,13 +1,13 @@
-<a href="https://example.com/" style="
-  background-color: #000;
-  color: #fff;
-  padding: 6px 12px;
-  border-radius: 6px;
-  text-decoration: none;
-  font-weight: bold;
-  display: inline-block;
+<a href="#" style="
+  background:#000;
+  color:#fff;
+  padding:4px 10px;
+  border-radius:6px;
+  font-size:12px;
+  text-decoration:none;
+  font-family:monospace;
 ">
-  Button Text
+  last_update: 2026-02-08
 </a>
 
 
