@@ -1,0 +1,3 @@
+﻿,POSITIVE ,NEGATIVE (manually validated),"NEGATIVE (estimated from total negatives n=769,639 assuming proportions calcualted from manual validation)"
+TRUE,"3,364","4,991","768,254"
+FALSE,"1,833",9,"1,385"
