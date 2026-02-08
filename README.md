@@ -1,5 +1,5 @@
 # Research compendium for Field and Dean (under revision)
-This R- and Python-based researchcompendium supports an semi-autonomous computer vision survey of the Northern San Juan for detecting archaeological sites.
+This R- and Python-based research compendium supports a semi-autonomous computer vision survey of the Northern San Juan for detecting archaeological sites.
 
 # Overview
 There are two main scripts fieldanddean2026.qmd and fieldanddean2026.ipny. The first is a Quarto markdown document that includes code to perform all of the data scraping and image creation steps reported in the manuscript. The second is a Jupyter Notebook that includes code to perfrom the computer vision training and deployment.
