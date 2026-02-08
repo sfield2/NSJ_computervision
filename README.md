@@ -1,4 +1,4 @@
-![License](https://img.shields.io)
+# <kbd>[**Button Text**](https://example.com/)</kbd>
 
 # Research compendium for Field and Dean (under revision)
 This R- and Python-based research compendium supports a semi-autonomous computer vision survey of the Northern San Juan for detecting archaeological sites.
