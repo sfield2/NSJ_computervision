@@ -13,7 +13,7 @@ fieldanddean2026.qmd performs the following steps:
 6. Deploy PyTorch Classifier
 
 # Directory Strucutre
-1. fieldanddean2026.qmd: `R` and `Python` scripts to conduct analyses
+1. `FieldandDean2026.qmd`: `R` and `Python` scripts to conduct analyses
 2. DATA/: Directory containing un-processed datasets used in the analysis. Not archived on Github, as many of these data are quite large.
 4. FIGURES/: Directory containing low resolution figures used in the manuscript.
 5. TABLES/: Directory containing tabular outputs used in the manuscript.
