@@ -5,20 +5,19 @@ This R- and Python-based researchcompendium supports an semi-autonomous computer
 There are two main scripts fieldanddean2026.qmd and fieldanddean2026.ipny. The first is a Quarto markdown document that includes code to perform all of the data scraping and image creation steps reported in the manuscript. The second is a Jupyter Notebook that includes code to perfrom the computer vision training and deployment.
 
 fieldanddean2026.qmd performs the following steps:
-1. 
-2.
-3.
-
-fieldanddean2026.qmd performs the followings teps:
+1. Import `R` and `Python` dependencies
+2. Import custom R-functions and establish directories
+3. Import Study Region Shapefiles
+4. Import Elevation Data
+5. Train PyTorch Classifier on Training Data (MVNP Sites)
+6. Deploy PyTorch Classifier
 
 # Directory Strucutre
-1. fieldanddean2026.qmd:
-2. fieldanddean2026.ipny:
-3. data-raw/: Directory containing un-processed datasets used in the analysis. Not archived on Github, as many of these data are quite large.
-4. data-derived/: Directory containing processed datasets created in the analysis.
-5. figures/: Directory containing figures used in the manuscript.
-6. tables/: Directory containing tabular data used in the manuscript.
-7. README.Rmd
+1. fieldanddean2026.qmd: `R` and `Python` scripts to conduct analyses
+2. DATA/: Directory containing un-processed datasets used in the analysis. Not archived on Github, as many of these data are quite large.
+4. FIGURES/: Directory containing low resolution figures used in the manuscript.
+5. TABLES/: Directory containing tabular outputs used in the manuscript.
+6. README.Rmd: This `README` file
 
 # Citation
 When using the code included in this research compenidum, please cite all of the following:
@@ -29,8 +28,8 @@ Field, S and L. Dean. Research compendium for: Computer Vision Survey of the Nor
 
 # Requirements
 This analysis requires R (≥ 4.2.0) and the following packages:
-`sf`  `terra`  `ggplot2`  `tidyterra`  `dplyr`  `tidyverse',
-             'elevatr','whitebox','giscoR','ggnewscale','ggblend',
-             'magick','stringr','filesstrings','purrr')
+`sf`  `terra`  `ggplot2`  `tidyterra`  `dplyr`  `tidyverse` `elevatr` `whitebox` `giscoR` `ggnewscale` `ggblend` `magick` `stringr` `filesstrings` `purrr`
 
+This analysis also requires `Python` (≥3.11.6) and the following libraries:
+`os` `splitfolders` `torch` `torch.nn` `torch.optim` `torchvision` `torchvision.transforms` `timm` `csv` `matplotlib.pyplot` `pandas` `numpy` `sys` `tqdm` `PIL`
 Ensure
