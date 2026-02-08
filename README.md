@@ -1,14 +1,5 @@
-<a href="#" style="
-  background:#000;
-  color:#fff;
-  padding:4px 10px;
-  border-radius:6px;
-  font-size:12px;
-  text-decoration:none;
-  font-family:monospace;
-">
-  last_update: 2026-02-08
-</a>
+[![Last-updated](https://img.shields.io/badge/last%20update-February%202026-brightgreen.svg)](https://github.com/sfield2/NSJ_computervision)
+[![License](https://img.shields.io/github/license/mashape/apistatus.svg)](http://choosealicense.com/licenses/mit/)
 
 
 # Research compendium for Field and Dean (under revision)
