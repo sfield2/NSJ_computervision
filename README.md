@@ -23,23 +23,27 @@ fieldanddean2026.qmd performs the followings teps:
 # Citation
 When using the code included in this research compenidum, please cite all of the following:
 
+Field, S and L. Dean. A Computer Vision Survey of the Northern San Juan and the Case for Image Classification in Archaeology. American Antiquity, In review.
+
+Field, S and L. Dean. Research compendium for: Computer Vision Survey of the Northern San Juan and the Case for Image Classification in Archaeology, 2026. Version 1.0.0. Zenodo. [DOI]
+
 # Requirements
 This analysis requires R (≥ 4.2.0) and the following packages:
 
-    pak
-    magrittr
-    tidyverse
-    fs
-    sf
-    terra
-    paletteer
-    tidyterra
-    sbtools
-    exactextractr
-    openxlsx
-    slider
-    lightgbm
-    furrr
-    ragg
+'sf'
+'terra'
+'ggplot2'
+'tidyterra'
+'dplyr'
+'tidyverse'
+'elevatr'
+'whitebox'
+'giscoR'
+'ggnewscale'
+'ggblend'
+'magick'
+'stringr'
+'filesstrings'
+'purrr'
 
 Ensure
